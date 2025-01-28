@@ -1,0 +1,4 @@
+.slds-modal__container{
+    height: fit-content;
+    max-height: 100% !important;
+}

@@ -1,0 +1,39 @@
+<template>
+    <div class="main-container">
+       <div class="body-content">
+        <div class={alignmentClass}>
+            <!-- Image Column -->
+            <div class="image-column">
+                <template if:true={imageUrl}>
+                    <img src={imageUrl} alt="Product Image" class="product-image" />
+                </template>
+            </div>
+
+            <!-- Content Column -->
+            <div class="content-column">
+                <template if:true={productName}>
+                    <div class="slds-p-horizontal_medium">
+                        <p class="product-name">{productName}</p>
+                        <span class="vertical-feature-stand-alone__headline-separator"></span>
+                        <p class="product-description">{productDescription}</p>
+                        <p>&nbsp;</p>
+                        <p>&nbsp;</p>
+                        <!-- Learn More Button directly under the description -->
+                        <button
+                            class="learnmore-btn"
+                            onclick={handleProductClick}
+                        >LEARN MORE</button>
+                    </div>
+                </template>
+
+                <template if:true={error}>
+                    <div class="slds-text-color_error">
+                        <p>Error fetching product details.</p>
+                    </div>
+                    
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+</template>
