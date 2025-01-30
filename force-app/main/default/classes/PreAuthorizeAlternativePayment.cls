@@ -83,6 +83,7 @@ public abstract without sharing class PreAuthorizeAlternativePayment {
 
     @AuraEnabled
     public static String getPaymentMethodGateway(String paymentMethod) {
+        System.debug('paymentMethod in PreAuthAltPayment class -->> '+ paymentMethod);
         String paymentGatewayId;
         List<PaymentGateway> paymentGateways = [
                 SELECT Id

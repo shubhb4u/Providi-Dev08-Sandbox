@@ -19,6 +19,7 @@ public without sharing class AlternativePaymentController extends PreAuthorizeAl
     public static AlternativePaymentMethod preAuthorize( string country, string postalCode, string region, string city, string street,  String cartId, String paymentMethod) {
         try {
             // Create the Alternative Payment Method (APM)
+            System.debug('paymentMethod-->> '+ paymentMethod);
             AlternativePaymentMethod APMId = createAlternativePaymentMethod(country, postalCode, region, city, street, cartId, paymentMethod);
             System.debug('APMId-->>>  ' + APMId);
             updateCartWithAPM(cartId, APMId.Id);

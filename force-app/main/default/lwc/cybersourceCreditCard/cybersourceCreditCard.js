@@ -4,7 +4,7 @@ import { loadScript } from 'lightning/platformResourceLoader';
 import microformScript from '@salesforce/resourceUrl/CybersourceMicroform';
 import communityId from '@salesforce/community/Id';
 import { getSessionContext } from 'commerce/contextApi';
-import { useCheckoutComponent, CheckoutInformationAdapter, postAuthorizePayment } from 'commerce/checkoutApi';
+import { useCheckoutComponent, CheckoutInformationAdapter, postAuthorizePayment,placeOrder } from 'commerce/checkoutApi';
 import getStateOptions from '@salesforce/apex/CybersourceController.getStateOptions';
 import generateKey from '@salesforce/apex/CybersourceController.generateKey';
 import authorizeCard from '@salesforce/apex/CybersourceController.authorizeCard';
@@ -76,7 +76,7 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             case 'BEFORE_PAYMENT':
                 return Promise.resolve(this.createTransientToken());
             case 'PAYMENT':
-                return Promise.resolve(this.authPayment());
+                    return Promise.resolve(this.authPayment());
             case 'BEFORE_PLACE_ORDER':
                 return Promise.resolve(this.updatePaymentInformation());
             default:
@@ -171,6 +171,7 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             });
     }
 
+
     handleFirstNameChange(event) {
         this.firstName = event.target.value;
     }
@@ -262,8 +263,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
         this.nickname = event.target.value;
     }
 
-
-
     createTransientToken() {
         this.errorMessages = [];
         if (this.firstName.length < 1 || this.lastName.length < 1) {
@@ -309,43 +308,13 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
 
             resolve(true);
         }));
-
-
-        if (!this.transientToken && this.errorMessages.length > 0) {
-            return this.errorMessages;
-        }
     }
-
-
 
 
     get showCardErrors() {
         return this.errorMessages.length > 0;
     }
 
-    /**
-     * Determines if you are in the experience builder currently
-     */
-    isInSitePreview() {
-        let url = document.URL;
-        return (
-            url.indexOf('sitepreview') > 0 ||
-            url.indexOf('livepreview') > 0 ||
-            url.indexOf('live-preview') > 0 ||
-            url.indexOf('live.') > 0 ||
-            url.indexOf('.builder.') > 0
-        );
-    }
-
-    /**
-     * The current checkout mode for this component
-     *
-     * @type {CheckoutMode}
-     */
-    get checkoutMode() {
-
-        return this._checkoutMode;
-    }
 
     validateShippingAddress() {
         let isValidShipping = false;
@@ -444,7 +413,7 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
 
             if (paymentId) {
                 // Wait for 3 seconds before proceeding (if needed)
-                await new Promise(resolve => setTimeout(resolve, 4000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
 
                 const paymentResult = await this.callPostAuth(paymentId, billingAddress, 'Credit Card');
                 console.log('Payment Result:', paymentResult);
@@ -491,17 +460,18 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     async updatePaymentInformation() {
         console.log('Inside updatePaymentInformation entry');
 
-        try {
-            const altPayment = await updatePaymentInstrument({ cartId: this.cartId, gatewayToken: this.paymentId });
-            console.log('altPayment-->> ' + altPayment);
-            return altPayment;
+            try {
 
-        } catch (error) {
-            console.log('error during alt payment update -->> '+ error);
-            return error;
+                const altPayment = await updatePaymentInstrument({ cartId: this.cartId, gatewayToken: this.paymentId });
+                console.log('altPayment-->> ' + altPayment);
+                return altPayment;
+    
+            } catch (error) {
+                console.log('error during alt payment update -->> '+ error);
+                return error;
+            }
         }
-
-    }
+        
 
     // async placeCCOrder() {
     //     let orderResponse = await placeOrder();
@@ -532,4 +502,19 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     //     });
     // }
 
+    isInSitePreview() {
+        let url = document.URL;
+
+        return (
+        url.indexOf("sitepreview") > 0 ||
+        url.indexOf("livepreview") > 0 ||
+        url.indexOf("live-preview") > 0 ||
+        url.indexOf("live.") > 0 ||
+        url.indexOf(".builder.") > 0
+        );
+    }
 }
+
+    
+
+
