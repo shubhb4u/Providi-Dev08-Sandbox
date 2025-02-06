@@ -1,0 +1,31 @@
+.microflex-container, .expiration-container, .cardname-container {
+    display: flex;
+}
+
+h2.dxp-text-heading-medium {
+    font-weight: var(--dxp-c-text-block-font-weight);
+    margin-bottom: 12px;
+}
+
+.form-control {
+    height: 20px;
+    display: flex;
+    align-items: center;
+}
+
+.microform-layout-item, lightning-select, lightning-input {
+    margin-right: 32px;
+}
+
+.form-control iframe {
+    height: 20px;
+}
+
+.form-control  .slds-input{
+
+    height: 20px;
+}
+
+.error-messages-container {
+    color: red;
+}

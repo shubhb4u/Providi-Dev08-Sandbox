@@ -1,0 +1,241 @@
+.splide .splide__list {
+	display: flex;
+	width: auto;
+}
+
+.splide.one-slide {
+	visibility: visible;
+}
+
+.splide.one-slide .splide__slide {
+	margin-left: 0 !important;
+	margin-right: 0 !important;
+}
+
+.splide.is-static {
+	margin-bottom: -20px;
+}
+
+.splide.is-static .splide__list {
+	transform: translateX(0) !important;
+	justify-content: center;
+}
+
+.splide.is-static .splide__arrows {
+	display: none !important;
+}
+
+@media (min-width: 768px) {
+	.splide.sm-static {
+		margin-bottom: -20px;
+	}
+
+	.splide.sm-static .splide__list {
+		transform: translateX(0) !important;
+		justify-content: center;
+	}
+
+	.splide.sm-static .splide__arrows {
+		display: none !important;
+	}
+}
+
+@media (min-width: 992px) {
+	.splide.md-static {
+		margin-bottom: -20px;
+	}
+
+	.splide.md-static .splide__list {
+		transform: translateX(0) !important;
+		justify-content: center;
+	}
+
+	.splide.md-static .splide__arrows {
+		display: none !important;
+	}
+}
+
+@media (min-width: 1200px) {
+	.splide.lg-static {
+		margin-bottom: -20px;
+	}
+
+	.splide.lg-static .splide__list {
+		transform: translateX(0) !important;
+		justify-content: center;
+	}
+
+	.splide.lg-static .splide__arrows {
+		display: none !important;
+	}
+}
+
+@media (min-width: 1400px) {
+	.splide.xl-static {
+		margin-bottom: -20px;
+	}
+
+	.splide.xl-static .splide__list {
+		transform: translateX(0) !important;
+		justify-content: center;
+	}
+
+	.splide.xl-static .splide__arrows {
+		display: none !important;
+	}
+}
+
+@media (min-width: 1760px) {
+	.splide.xxl-static {
+		margin-bottom: -20px;
+	}
+
+	.splide.xxl-static .splide__list {
+		transform: translateX(0) !important;
+		justify-content: center;
+	}
+
+	.splide.xxl-static .splide__arrows {
+		display: none !important;
+	}
+}
+
+.splide .splide__slide {
+	margin: 15px 15px 20px;
+	width: 320px;
+}
+
+@media (max-width: 991px) {
+	.splide .splide__slide {
+		margin-left: 1vw;
+		margin-right: 1vw;
+	}
+
+	.splide .splide__slide:first-child {
+		margin-left: 15px;
+	}
+
+	.splide .splide__slide:last-child {
+		margin-right: 15px;
+	}
+}
+
+@media (max-width: 767px) {
+	.splide .splide__slide {
+		width: 84vw;
+	}
+}
+
+@media (max-width: 767px) {
+	.splide.xs-no-offset .splide__slide {
+		padding: 0 15px;
+		margin-left: 0;
+		margin-right: 0;
+		width: 100%;
+	}
+}
+
+.splide .splide__arrows .splide__arrow.icomoon-icon {
+	font-size: 0;
+	background: none;
+	border: 0;
+	padding: 0 2px;
+}
+
+.splide .splide__arrows .splide__arrow.icomoon-icon:before {
+	font-size: 20px;
+	color: #fb4f14;
+	font-weight: bold;
+	opacity: 1;
+}
+
+.splide .splide__arrows .splide__arrow.icomoon-icon.is-disabled {
+	pointer-events: none;
+	cursor: default;
+}
+
+.splide .splide__arrows .splide__arrow.icomoon-icon.is-disabled:before {
+	opacity: 0;
+}
+
+.splide.splide__inline-arrows .splide__arrows {
+	position: absolute;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.splide.splide__inline-arrows .splide__arrows .splide__arrow.icomoon-icon:before {
+	font-size: 40px;
+}
+
+.splide.splide__page-arrows .splide__arrows {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.splide.splide__page-arrows .splide__arrows .splide__arrow.icomoon-icon {
+	font-size: 0;
+	/*background: none;*/
+	border: 0;
+	padding: 0 2px;
+}
+
+.splide.splide__page-arrows .splide__arrows .splide__arrow.icomoon-icon:before {
+	font-size: 20px;
+	color: #fb4f14;
+	font-weight: bold;
+	opacity: 1;
+}
+
+.splide.splide__page-arrows .splide__arrows .splide__arrow.icomoon-icon.is-disabled {
+	pointer-events: none;
+	cursor: default;
+}
+
+.splide.splide__page-arrows .splide__arrows .splide__arrow.icomoon-icon.is-disabled:before {
+	opacity: 0;
+}
+
+.splide.splide__page-arrows .splide__arrows .splide__pagination {
+	width: auto;
+}
+
+.splide .splide__pagination__wrap {
+	line-height: 0;
+}
+
+.splide .splide__pagination {
+	padding: 0;
+}
+
+.splide .splide__pagination li button,
+button.splide__arrow{
+	border: 1px solid #fb4f14;
+	background-color: transparent;
+	border-radius: 50%;
+	margin: 4px;
+	height: 12px;
+	width: 12px;
+	padding: 0;
+	vertical-align: top;
+	cursor: pointer;
+}
+
+
+.splide .splide__pagination li button.is-active {
+	background-color: #fb4f14;
+}
+
+.slick-v3, .sn-wrap {
+	display: none;
+}
+
+
+.splide--slide.q-single-slide .splide__arrows{
+	display: none!important;
+}

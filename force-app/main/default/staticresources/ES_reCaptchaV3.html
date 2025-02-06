@@ -1,0 +1,23 @@
+<head>
+    <title>reCAPTCHA demo: Simple page</title>
+    <script src="https://www.google.com/recaptcha/api.js?render=6LfDnk0kAAAAAFmneDGePru6EUbFa0bKG0sS1Rgo"></script>
+ </head>
+ <body>
+ <input type="hidden" name="recaptcha_response" id="recaptchaResponse"/>
+ <script type="text/javascript">
+ 
+ 
+    grecaptcha.ready(function() {
+        grecaptcha.execute('6LfDnk0kAAAAAFmneDGePru6EUbFa0bKG0sS1Rgo', {action: 'submit'}).then(function(token) {
+            recaptchaResponse.value = token;
+            if (token == "") {
+                //replace YOURDOMAIN with your SFDC Domain (Eg: https://testorg.lightning.force.com
+                parent.postMessage({ action: "getCAPCHA", callCAPTCHAResponse : "NOK"}, "*");
+            } else {
+                parent.postMessage({ action: "getCAPCHA", callCAPTCHAResponse : token}, "*");
+            }
+        });
+    })
+ </script>
+ </body>
+ </html>

@@ -1,0 +1,202 @@
+.product-container {
+    display: flex; /* Use flexbox to align sections side by side */
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    align-items: center; /* Vertically align items */
+    gap: 20px; /* Add spacing between the sections */
+    justify-content: space-between; /* Push items to either side */
+    background-color: #1a1a1a; /* Background color only for the details section */
+}
+
+.product-image {
+    flex: 1; /* Image section takes equal space */
+    background-color: transparent; /* No background color for the image */
+}
+
+.product-image img {
+    max-width: 100%; /* Ensure the image scales within the container */
+    border-radius: 10px;
+    height: auto; /* Maintain image aspect ratio */
+}
+
+.product-details {
+    flex: 1; /* Text section takes equal space */
+}
+
+.product-name {
+    font-size: 1.8em;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+.product-description {
+    font-size: 1em;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.learn-more-button {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+.learn-more-button:hover {
+    background-color: #0056b3;
+}
+
+.product-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    display: block;
+}
+.slds-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.slds-m-top_medium {
+    margin-top: 1rem; /* Adds spacing above the button */
+}
+.left-aligned {
+    display: flex;
+    flex-direction: row; /* Image on the left */
+    gap: 1rem;
+}
+
+.right-aligned {
+    display: flex;
+    flex-direction: row-reverse; /* Image on the right */
+    gap: 1rem;
+}
+
+.image-column {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.content-column {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+
+    .product-image {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        width: 768px;
+        height: 400px;
+        position: absolute;
+        top: 215px;
+        
+}
+
+
+
+.slds-p-horizontal_medium{
+    padding-left: calc(50vw - 720px);
+}
+
+.main-container{
+    background: linear-gradient(to bottom, rgba(0, 167, 225, 1) 0%, rgb(45, 72, 157) 60%, rgba(45, 72, 157, 1) 100%);
+    height: 664px;
+    width: 1519px;
+}
+
+.content-column{
+    background-color: #1d1f20;
+    height: 458px;
+    width: 1139px;
+}
+
+
+p{
+    color: #fff;
+}
+
+.product-name{
+    font-size: 3.25rem;
+    line-height: 3.375rem;
+}
+
+.product-description{
+    font-size: 1.25rem;
+    line-height: 1.875rem;
+    width: 670px;
+    overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 1px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.vertical-feature-stand-alone__headline-separator{
+    background: #ed448b;
+    display: block;
+    width: 90px;
+    height: 3px;
+    margin: 50px 0 1.25rem .125rem;
+}
+
+.learnmore-btn{
+    display: inline-block;
+    /* margin-top: 3.125rem; */
+    border: 1px solid transparent;
+    padding: 10px 20px;
+    text-align: center;
+    letter-spacing: 4.5px;
+    line-height: 20px;
+    font-size: .875rem;
+    transition: .1s ease-in;
+    color: #2d489d;
+    font-weight: 500;
+}
+
+.learnmore-btn:hover{
+    background-color: #2d489d;
+    color: #fff;
+}
+
+.body-content{
+    padding: 2.9375rem 0;
+}
+
+
+.right-aligned{
+    .product-image{
+        left: 751px;
+    }
+}
+
+.left-aligned{
+    .product-name{
+        padding-left: 50px;
+    }
+    .slds-p-horizontal_medium{
+        padding: 3.75rem 1.4375rem 3.75rem 7.25rem;
+    }
+    .product-description, .vertical-feature-stand-alone__headline-separator, .learnmore-btn{
+        margin-left: calc(25vw - 66px);
+    }
+    .learnmore-btn{
+        margin-top: 0;
+    }
+    .product-image{
+        right: 751px;
+
+    }
+}

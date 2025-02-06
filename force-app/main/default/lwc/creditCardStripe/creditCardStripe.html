@@ -1,0 +1,49 @@
+<template>
+    <lightning-card title="Credit Card Payment" icon-name="utility:money">
+        <div class="slds-p-around_medium">
+
+            <lightning-input
+                type="number"
+                label="Credit Card Number"
+                name="cardNumber"
+                placeholder="4111111111111111"
+                value={paymentData.cardNumber}
+                onchange={handleInputChange}
+                required>
+            </lightning-input>
+
+            <lightning-input
+                type="number"
+                label="CVV"
+                name="cvv"
+                placeholder="123"
+                value={paymentData.cvv}
+                onchange={handleInputChange}
+                required>
+            </lightning-input>
+
+            <div style="display: flex;width:100%;">
+                <div style="margin: 0.5rem;">
+                    <lightning-select 
+                        name="expMonth"
+                        label="Exp Month"
+                        value={paymentData.expMonth}
+                        options={monthOptions}
+                        onchange={handleInputChange}>
+                    </lightning-select>
+                </div>
+                <div style="margin: 0.5rem;">
+                    <lightning-select
+                        name="expYear"
+                        label="Exp Year"
+                        value={paymentData.expYear}
+                        options={yearOptions}
+                        onchange={handleInputChange}>
+                    </lightning-select>
+                </div>
+
+            </div>
+
+        </div>
+    </lightning-card>
+</template>
