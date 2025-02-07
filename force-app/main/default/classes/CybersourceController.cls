@@ -48,11 +48,8 @@ public with sharing class CybersourceController {
             String reqBody = '{"targetOrigins":["' + origin + '"], "allowedCardNetworks": ["VISA", "MASTERCARD", "AMEX", "JCB", "DINERSCLUB", "DISCOVER"],"clientVersion": "v2.0"}';
             HttpRequest req = generatePostRequest(reqTarget, reqBody);
             Http http = new Http();
-            System.debug('Request generateKey:-->>>> '+req);
             HttpResponse res = http.send(req);
-            System.debug('Response generateKey: ->>>>>>  '+res.getBody());
-            // Map<String, Object> resMap = (Map<String, Object>)JSON.deserializeUntyped(res.getBody());
-            // System.debug('Response Map:-->>>  '+resMap);
+            // System.debug('Response generateKey: ->>>>>>  '+res.getBody());
             return res.getBody();
         } catch(Exception e) {
             return e.getMessage();

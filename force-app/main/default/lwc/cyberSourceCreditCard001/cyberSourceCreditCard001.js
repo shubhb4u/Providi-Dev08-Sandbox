@@ -4,12 +4,15 @@ import { loadScript } from 'lightning/platformResourceLoader';
 import microformScript from '@salesforce/resourceUrl/CybersourceMicroform';
 import communityId from '@salesforce/community/Id';
 import { getSessionContext } from 'commerce/contextApi';
-import { useCheckoutComponent, CheckoutInformationAdapter, postAuthorizePayment, placeOrder } from 'commerce/checkoutApi';
+import { useCheckoutComponent, CheckoutInformationAdapter, simplePurchaseOrderPayment, postAuthorizePayment, placeOrder } from 'commerce/checkoutApi';
 import getStateOptions from '@salesforce/apex/CybersourceController.getStateOptions';
 import generateKey from '@salesforce/apex/CybersourceController.generateKey';
 import authorizeCard from '@salesforce/apex/CybersourceController.authorizeCard';
 import { CartSummaryAdapter, refreshCartSummary } from 'commerce/cartApi';
 import updatePaymentInstrument from '@salesforce/apex/CybersourceController.updatePaymentInstrument';
+import preAuthorizeAlternatePayment from '@salesforce/apex/AlternativePaymentController.preAuthorize';
+import getCreditLimit from '@salesforce/apex/AlternativePaymentController.getCreditLimit';
+import updateCreditLimit from '@salesforce/apex/AlternativePaymentController.updateCreditLimit';
 
 
 // Error Constants
@@ -19,11 +22,14 @@ const CARD_EXPIRED_ERROR = 'Credit Card is expired';
 const CARD_INVALID_ERROR = 'Invalid Card Number';
 const CVV_INVALID_ERROR = 'Invalid Security Code';
 
-export default class CybersourceCreditCard extends NavigationMixin(LightningElement) {
-    @api checkoutDetails;
 
+
+export default class CybersourceCreditCard extends NavigationMixin(useCheckoutComponent(LightningElement)) {
+    @api checkoutDetails;
+    isLoading = false;
+    firstLoad = false;
     _checkoutMode = 1;
-    transientToken = '';
+    transientToken;
     microform;
     firstName = '';
     lastName = '';
@@ -48,7 +54,7 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
         { label: '11', value: '11' },
         { label: '12', value: '12' }
     ];
-    yearOptions = [];
+    @track yearOptions = [];
     stateOptions = [];
 
     effectiveAccountId;
@@ -58,48 +64,125 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
     @track shippingAddress;
     @track errorMessages = [];
     @track billingAddress;
+    @track showError = false;
+    @track error;
+
+    @api headerLabel;
+    @api inputLabel;
+    @api placeholderLabel;
+    @api hideHeading = false;
+    poNumber;
+    GatewayToken;
+    postAuthCalls;
+    authPaymentToken;
+    effectiveAccountId;
+    availableCreditLimit;
+    disablePlaceOrderButton = false;
+    generatedPONumber;
+
     @track grandTotalAmount;
     paymentId;
-    billingAddress;
     cartId;
+    isCreditCard = true;
+    isPO = false;
+    isWire = false;
+    selectedPaymentType;
 
-    /**
-     * 
-     * Get the CheckoutData from the standard salesforce adapter
-     * Response is expected to be 202 while checkout is starting
-     * Response will be 200 when checkout start is complete and we can being processing checkout data 
-     */
+    handlePaymentTypeSelection(event) {
+        this.selectedPaymentType = event.currentTarget.dataset.type;
+        if (this.selectedPaymentType == 'wire') {
+            this.isCreditCard = false;
+            this.isPO = false;
+            this.isWire = true;
+        } else if (this.selectedPaymentType == 'card') {
+            this.isCreditCard = true;
+            this.isPO = false;
+            this.isWire = false;
+        } else {
+            this.isCreditCard = false;
+            this.isPO = true;
+            this.isWire = false;
+        }
+    }
+
+
     @wire(CheckoutInformationAdapter, {})
     checkoutInfo({ error, data }) {
         if (!this.isInSitePreview()) {
-            console.log('cybersourcePayment checkoutInfo');
+            console.log(' checkoutInfo');
+
             if (data) {
                 this.checkoutId = data.checkoutId;
                 this.cartId = data.cartSummary?.cartId;
-                this.grandTotalAmount = data.cartSummary?.grandTotalAmount;
-                console.log('cybersourcePayment checkoutInfo checkoutInfo: ' + JSON.stringify(data));
-                this.shippingAddress = data.deliveryGroups.items[0].deliveryAddress;
+                this.deliveryAddress = data.deliveryGroups?.items[0].deliveryAddress;
+                this.grandTotalAmount = parseFloat(data.cartSummary?.grandTotalAmount || 0); // Ensure numeric value
+                console.log('PO checkoutInfo:', JSON.stringify(data));
 
+                this.shippingAddress = data.deliveryGroups?.items[0].deliveryAddress;
+
+                // Now that we have grandTotalAmount, check credit limit if not already checked
+                if (!this.availableCreditLimit) {
+                    this.getAccountCreditLimit();
+                } else {
+                    this.evaluatePlaceOrderButton();
+                }
             } else if (error) {
-                console.log('##cybersourcePayment checkoutInfo Error: ' + error);
+                console.log('##cybersourcePayment checkoutInfo Error:', error);
             }
         }
     }
 
-    // retrieve the cart summary information
-    // @wire(CartSummaryAdapter, {})
-    // cartSummary({ error, data }) {
-    //     if (!this.isInSitePreview()) {
-    //         if (data) {
-    //             this.grandTotalAmount = data.grandTotalAmount;
-    //         } else if (error) {
-    //             console.log('##cybersourcePayment checkoutInfo Error: ' + error);
-    //         }
-    //     }
-    // }
+    async getAccountCreditLimit() {
+        try {
+            const response = await getCreditLimit({ accountId: this.effectiveAccountId });
+            console.log('response-->>', JSON.stringify(response));
+            this.availableCreditLimit = parseFloat(response.Credit_limit__c || 0);
+
+            // Ensure grandTotalAmount is available before evaluating the button
+            if (this.grandTotalAmount !== undefined) {
+                this.evaluatePlaceOrderButton();
+            }
+        } catch (error) {
+            console.log('Error fetching credit limit-->>', error);
+        }
+    }
+
+    evaluatePlaceOrderButton() {
+        if (this.availableCreditLimit !== undefined && this.grandTotalAmount !== undefined) {
+            this.disablePlaceOrderButton = this.availableCreditLimit < this.grandTotalAmount;
+            console.log('disablePlaceOrderButton-->>', this.disablePlaceOrderButton);
+            if (!this.disablePlaceOrderButton) {
+                this.generatedPONumber = this.generateRandomPONumber();
+            } else {
+                this.generatedPONumber = '';
+            }
+        }
+    }
+
 
     async connectedCallback() {
+        if (!sessionStorage.getItem('pageReloaded')) {
+            sessionStorage.setItem('pageReloaded', 'true');
+            setTimeout(() => location.reload(), 2000);
+        }
         this.currentCommunityId = communityId;
+
+        try {
+            const ctx = await getSessionContext();
+            this.effectiveAccountId = ctx.effectiveAccountId;
+
+            if (this.effectiveAccountId) {
+                await this.getAccountCreditLimit();
+
+                // Ensure grandTotalAmount is set before evaluating the button
+                if (this.grandTotalAmount !== undefined) {
+                    this.evaluatePlaceOrderButton();
+                }
+            }
+        } catch (err) {
+            console.error('Error getting Session Context:', err);
+        }
+
         // populate this.yearOptions
         const currentYear = new Date().getFullYear();
         this.expYear = '' + currentYear;
@@ -108,36 +191,133 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
             this.yearOptions.push({ label: yearString, value: yearString });
         }
 
+        console.log('yearOptions:-->> ', this.yearOptions);
+
         getStateOptions()
             .then(res => {
                 this.stateOptions = (res || []).map(state => { return { label: state.State_Name__c, value: (state.Abbreviation__c + ':' + state.Country_Code__r.Alpha2Code__c) }; });
             })
             .catch(err => {
                 console.log(err);
-            })
+            });
 
-        getSessionContext().then(ctx => {
-            console.log(ctx);
-            this.effectiveAccountId = ctx.effectiveAccountId;
-        }).catch(err => {
-            console.log('Error getting Session Context:', err);
-        });
 
         await loadScript(this, microformScript)
             .then(() => {
                 this.setupMicroform();
-                console.log('this.microform -->> ' + this.microform);
-
             }).catch(err => {
                 console.log(err);
             });
     }
 
+    generateRandomPONumber() {
+        return `PO-${Math.floor(10000 + Math.random() * 90000)}`;
+    }
+
+
+    @api
+    reportValidity() {
+
+        if (this.isCreditCard) {
+            this.errorMessages = [];
+            let isValid = true;
+            let isShippingValid = this.validateShippingAddress();
+
+            isValid = isValid && this.checkValidity();
+
+            if (!isShippingValid) {
+                this.errorMessages.push('Please select a valid Shipping Address');
+            }
+
+            return isValid && isShippingValid && this.errorMessages.length < 1;
+
+        } else {
+            console.log('simplePurchaseOrder: in reportValidity');
+            const purchaseOrderInput = this.generatedPONumber;
+            let isValid = false;
+
+            if (purchaseOrderInput) {
+                console.log('simplePurchaseOrder purchaseOrderInput: ' + JSON.stringify(purchaseOrderInput));
+                isValid = true;
+                this.showError = false;
+            } else {
+                console.log('simplePurchaseOrder purchaseOrderInput not found: ' + JSON.stringify(purchaseOrderInput));
+                this.showError = true;
+                this.error = "Please enter a purchase order number.";
+            }
+            return isValid;
+        }
+    }
+
+    @api
+    async paymentProcess() {
+        console.log('simplePurchaseOrder: in checkout save');
+
+        if (!this.reportValidity()) {
+            throw new Error('Required data is missing');
+        }
+
+        if (this.isCreditCard) {
+            this.createTransientToken();
+        } else {
+            const createAltPayment = await this.preAuthorizePayment();
+        }
+
+    }
+
+
+    @api
+    async completePayment() {
+        let address = this.shippingAddress;
+        const purchaseOrderInputValue = this.generatedPONumber;
+
+        console.log('Inside completePayment');
+        let po = await simplePurchaseOrderPayment(this.checkoutId, purchaseOrderInputValue, address);
+        console.log('po authorized -->> ' + JSON.stringify(po));
+        setTimeout(() => {
+            this.callPostAuth(this.authPaymentToken, address, 'Purchase Order');
+        }, 3000);
+        return po;
+    }
+
+
+    async preAuthorizePayment() {
+        // console.log('authorizePayment called-->> ');
+        await preAuthorizeAlternatePayment({
+            country: this.deliveryAddress.country,
+            postalCode: this.deliveryAddress.postalCode,
+            region: this.deliveryAddress.region,
+            city: this.deliveryAddress.city,
+            street: this.deliveryAddress.street,
+            cartId: this.cartId,
+            paymentMethod: 'Purchase Order Cybersource'
+        }).then(response => {
+
+            if (typeof response === 'string') {
+                response = JSON.parse(response);
+            }
+
+            this.alternatePaymentMet = response;
+            console.log('this.alternatePaymentMet:-->> ', this.alternatePaymentMet);
+
+            this.authPaymentToken = response.GatewayToken;
+
+            this.completePayment();
+
+            return this.authPaymentToken;
+        }).catch(error => {
+            return error;
+        });
+    }
+
+
+    ////////////////////////// Credit card Code /////////////
+
     // create the Cybersource form and add the fields
     setupMicroform() {
         generateKey().then(res => {
             const flex = new Flex(res);
-            const microform = flex.microform({ 'iframe': { 'line-height': '1.875rem' } });
+            const microform = flex.microform({ 'iframe': { 'line-height': '0.5rem' } });
             const number = microform.createField('number');
             const securityCode = microform.createField('securityCode', { maxLength: 4 });
             const numberElement = this.template.querySelector('.number-container');
@@ -147,7 +327,7 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
             this.microform = microform;
         })
             .catch(err => {
-                console.log(err);
+                console.log('err from setup microform -->> ' + err);
             });
     }
 
@@ -242,41 +422,7 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
         this.nickname = event.target.value;
     }
 
-    // stageAction(checkoutStage) {
-
-    //     console.log('checkoutStage: ' + checkoutStage);
-    //     switch (checkoutStage) {
-    //         case 'CHECK_VALIDITY_UPDATE':
-    //             return Promise.resolve(this.checkValidity());
-    //         case 'REPORT_VALIDITY_SAVE':
-    //             return Promise.resolve(this.reportValidity());
-    //         case 'BEFORE_PAYMENT':
-    //             return Promise.resolve(this.createTransientToken());
-    //         case 'PAYMENT':
-    //             return Promise.resolve(this.authPayment());
-
-    //         default:
-    //             return Promise.resolve(true);
-    //     }
-    // }
-
-    async createTransientToken() {
-
-        const transTok = await this.getTransientToken();
-        console.log('transTok -->> ' + transTok);
-
-        // Wait for 3 seconds
-        setTimeout(async () => {
-            // Assuming this returns a Promise
-
-            const result = await this.authPayment();
-            console.log('result-->>', result);
-
-        }, 3000);
-    }
-
-
-    getTransientToken() {
+    createTransientToken() {
         this.errorMessages = [];
         if (this.firstName.length < 1 || this.lastName.length < 1) {
             this.errorMessages.push(NAME_ERROR);
@@ -298,24 +444,109 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
                 if (err.details && err.details.length > 0) {
                     for (let i = 0; i < err.details.length; i++) {
                         if (err.details[i].message == 'Validation error' && err.details[i].location == 'number') {
-                            // this.errorMessages.push(CARD_INVALID_ERROR);
+                            this.errorMessages.push(CARD_INVALID_ERROR);
+                            console.log('CARD_INVALID_ERROR' + CARD_INVALID_ERROR);
                         } else if (err.details[i].message == 'Validation error' && err.details[i].location == 'securityCode') {
-                            // this.errorMessages.push(CVV_INVALID_ERROR);
+                            this.errorMessages.push(CVV_INVALID_ERROR);
+                            console.log('CVV_INVALID_ERROR' + CVV_INVALID_ERROR);
                         } else {
                             this.errorMessages.push(err.details[i].message);
+                            console.log('err.details[i].message' + err.details[i].message);
                         }
                     }
                 } else {
                     this.errorMessages.push(err.message);
+                    console.log('err.message--..' + err.message);
                 }
                 console.log('Error:', this.errorMessages);
                 this.createTokenReturned = true;
             }
             console.log('Token:', token);
             this.transientToken = token;
-            // console.log('this.transientToken--->> ' + this.transientToken);
+            console.log('this.transientToken--->> ' + this.transientToken);
+            if (this.transientToken) {
+                setTimeout(() => {
+                    this.authPayment();
+                }, 2000);
+            }
             resolve(true);
         }));
+    }
+
+    async authPayment() {
+        try {
+            const stateCode = this.state.split(':')[0];
+            const countryCode = this.state.split(':')[1];
+            const billingAddress = {
+                name: `${this.firstName} ${this.lastName}`,
+                street: this.street,
+                city: this.city,
+                region: stateCode,
+                country: countryCode,
+                postalCode: this.postalCode
+            };
+
+            const isValid = this.checkValidity();
+            if (!isValid) {
+                this.errorMessages = ['Error: Invalid payment details provided.'];
+                return this.errorMessages;
+            }
+
+            const paymentData = {
+                token: this.transientToken,
+                createToken: true,
+                accountId: this.effectiveAccountId,
+                currencyISOCode: 'USD',
+                addressString: JSON.stringify(billingAddress),
+                expirationMonth: this.expMonth,
+                expirationYear: this.expYear,
+                firstName: this.firstName,
+                lastName: this.lastName,
+                communityId: this.currentCommunityId,
+                amount: this.grandTotalAmount
+            };
+
+            // Authorize Card
+            const authorizeResponse = await authorizeCard({ paymentsData: paymentData });
+
+            if (!authorizeResponse) {
+                this.errorMessages = ['Error: Unknown error processing card'];
+                return this.errorMessages;
+            }
+
+            console.log('authorizeResponse:', authorizeResponse);
+
+            const paymentId = authorizeResponse.id;
+            this.authPaymentToken = paymentId;
+
+            this.paymentId = paymentId;
+            console.log('paymentId:', paymentId);
+
+            if (paymentId) {
+                // Wait for 3 seconds before proceeding (if needed)
+                await new Promise(resolve => setTimeout(resolve, 3000));
+
+                const paymentResult = await this.callPostAuth(paymentId, billingAddress, 'Credit Card');
+                console.log('Payment Result:', paymentResult);
+
+                if (paymentResult && paymentResult.salesforceResultCode === 'Success') {
+                    return {
+                        success: true,
+                        responseCode: paymentId
+                    };
+                } else {
+                    this.errorMessages = ['Error: Post-authorization failed.'];
+                    return this.errorMessages;
+                }
+            } else {
+                this.errorMessages = ['Error: No payment ID received.'];
+                return this.errorMessages;
+            }
+        } catch (error) {
+            console.error('Error in authPayment:', error);
+            this.errorMessages = [`Error: ${error.message || 'Unknown error occurred'}`];
+            return this.errorMessages;
+        }
     }
 
     get showCardErrors() {
@@ -353,134 +584,110 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
             this.errorMessages.push(CARD_EXPIRED_ERROR);
         }
 
-        console.log('checkValidity -->> ' + isValid + ' ' + this.errorMessages.length < 1 ? 'true' : 'false');
-
         return isValid && this.errorMessages.length < 1;
-    }
-
-    reportValidity() {
-        this.errorMessages = [];
-        let isValid = true;
-        let isShippingValid = this.validateShippingAddress();
-
-        isValid = isValid && this.checkValidity();
-
-        if (!isShippingValid) {
-            this.errorMessages.push('Please select a valid Shipping Address');
-        }
-
-        console.log('checkValidity -->> ' + isValid + ' ' + isShippingValid + ' ' + this.errorMessages.length < 1 ? 'true' : 'false');
-
-        return isValid && isShippingValid && this.errorMessages.length < 1;
-    }
-
-    async authPayment() {
-
-        const stateCode = this.state.split(':')[0];
-        const countryCode = this.state.split(':')[1];
-        const billingAddress = {
-            "name": this.firstName + " " + this.lastName,
-            "street": this.street,
-            "city": this.city,
-            "region": stateCode,
-            "country": countryCode,
-            "postalCode": this.postalCode
-        };
-
-        const isValid = this.reportValidity();
-        if (!this.transientToken) {
-            const waitForTransToken = await this.getTransientToken();
-            console.log('waitForTransToken-->> ' + waitForTransToken);
-        }
-        // this.reportValidity();
-        if (isValid) {
-            console.log('isValid-->> ' + isValid);
-            const paymentData = {
-                token: this.transientToken,
-                createToken: true,
-                accountId: this.effectiveAccountId,
-                currencyISOCode: 'USD',
-                addressString: JSON.stringify(billingAddress),
-                expirationMonth: this.expMonth,
-                expirationYear: this.expYear,
-                firstName: this.firstName,
-                lastName: this.lastName,
-                communityId: this.currentCommunityId,
-                amount: this.grandTotalAmount
-            };
-
-            const authorizeResponse = await authorizeCard({ paymentsData: paymentData });
-
-            if (authorizeResponse == null) {
-                this.errorMessages.push('Error: Unknown error processing card');
-                return this.errorMessages;
-            }
-            console.log('authorizeResponse:' + JSON.stringify(authorizeResponse));
-
-            let paymentId = authorizeResponse.id;
-            this.authPaymentToken = paymentId;
-            console.log('paymentId:-->>> ' + paymentId);
-
-
-            if (paymentId) {
-                setTimeout(() => {
-                    const postResult = this.callPostAuth(paymentId, billingAddress, 'Credit Card');
-                    console.log('Result from callPostAuth -->> ', JSON.stringify(postResult));
-
-                }, 4000);
-            }
-
-        } else {
-            this.errorMessages = ['Error: Unknown error processing card'];
-            // return this.errorMessages;
-        }
     }
 
     async callPostAuth(paymentId, billingAddress, paymentMethod) {
         try {
-            const paymentResult = await postAuthorizePayment(this.checkoutId, paymentId, billingAddress, { 'paymentMethod': paymentMethod, 'cartId': this.cartId });
-            console.log('paymentResult in callPostAuth-->> Next call -->> updatePaymentInformation ' + paymentResult);
+            const paymentResult = await postAuthorizePayment(this.checkoutId, paymentId, billingAddress, { 'paymentMethod': paymentMethod });
+            console.log('postAuthorizePayment paymentResult', paymentResult);
+
             if (paymentResult.salesforceResultCode == 'Success') {
+                this.postAuthCalls = this.postAuthCalls + 1;
                 this.updatePaymentInformation();
+
+            } else {
+                if (this.postAuthCalls == 1) {
+                    this.postAuthCalls = this.postAuthCalls + 1;
+                    setTimeout(() => {
+                        console.log('Attempting second PostAuthorization call');
+                        this.callPostAuth(paymentId, billingAddress, paymentMethod);
+                    }, 2000);
+                    this.errorMessages.push('Note :  We are resubmitting the payment information please wait for some time .');
+                } else {
+                    this.errorMessages = [];
+                    this.errorMessages.push('Please go back to the cart page and resubmit the billing data.');
+                }
+
+                return this.errorMessages;
             }
+
         } catch (error) {
-            console.log('error -->> ' + error);
-            return false;
+            console.log('postAuthorizePayment- exception', error);
+            // console.log("this.postAuthCalls", this.postAuthCalls);
+            if (this.postAuthCalls == 1) {
+                this.postAuthCalls = this.postAuthCalls + 1;
+                setTimeout(() => {
+                    console.log('Attempting second PostAuthorization call');
+                    this.callPostAuth(paymentId, billingAddress, paymentMethod);
+                }, 2000);
+                this.errorMessages.push('Note :  We are resubmitting the payment information please wait for some time .');
+            } else {
+                this.errorMessages = [];
+                this.errorMessages.push('Please go back to the cart page and resubmit the billing data.');
+            }
+            return this.errorMessages;
         }
     }
 
-
+    @api
     updatePaymentInformation() {
         console.log('updatePaymentInformation entry');
         updatePaymentInstrument({ cartId: this.cartId, gatewayToken: this.authPaymentToken }).then((data) => {
-            console.log('Payment instrument updated successfully-->> Next call -->> placeCCOrder.', data);
+            console.log('Payment instrument updated successfully.', data);
             if (data) {
-                setTimeout(() => {
-                    this.placeCCOrder();
-                }, 3000);
-
+                this.callPlaceOrderAPI();
             }
 
         }).catch(error => {
             console.log('reviewCartDetails- updatePaymentInstrument', JSON.stringify(error));
         });
+
     }
 
-    async placeCCOrder() {
+    async callPlaceOrderAPI() {
         let orderResponse = await placeOrder();
-        console.log("CC Order placed successfully:-->>>", JSON.stringify(orderResponse));
-        // console.log("CC Order placed successfully: orderResponse.orderReferenceNumber:-->>>", orderResponse.orderReferenceNumber);
+
+        // console.log("Order placed successfully:-->>>", JSON.stringify(orderResponse));
+        console.log("Order placed successfully: orderResponse.orderReferenceNumber:-->>>", orderResponse.orderReferenceNumber);
 
         if (orderResponse.orderReferenceNumber) {
-            setTimeout(() => {
-                refreshCartSummary();
-                this.navigateToOrder(orderResponse.orderReferenceNumber);
-                console.log('CC order With AltPayment orderReferenceNumber: ' + orderResponse.orderReferenceNumber);
-            }, 2000);
 
+            //Update credit limit of the account if order placed by PO - 
+            if (this.isPO) {
+                this.updateCreditLimitAccount();
+
+            }
+
+            refreshCartSummary();
+            this.navigateToOrder(orderResponse.orderReferenceNumber);
+            console.log('Order With AltPayment orderReferenceNumber: ' + orderResponse.orderReferenceNumber);
         } else {
             throw new Error("Required orderReferenceNumber is missing");
         }
+    }
+
+
+    async updateCreditLimitAccount() {
+        try {
+            const response = await updateCreditLimit({ accountId: this.effectiveAccountId, total: this.grandTotalAmount });
+            console.log('response-->>', JSON.stringify(response));
+
+        } catch (error) {
+            console.log('Error fetching credit limit-->>', error);
+        }
+    }
+
+    isInSitePreview() {
+        let url = document.URL;
+
+        return (
+            url.indexOf("sitepreview") > 0 ||
+            url.indexOf("livepreview") > 0 ||
+            url.indexOf("live-preview") > 0 ||
+            url.indexOf("live.") > 0 ||
+            url.indexOf(".builder.") > 0
+        );
     }
 
     navigateToOrder(orderNumber) {
@@ -494,31 +701,5 @@ export default class CybersourceCreditCard extends NavigationMixin(LightningElem
             }
         });
     }
-
-    /**
-     * Determines if you are in the experience builder currently
-     */
-    isInSitePreview() {
-        let url = document.URL;
-        return (
-            url.indexOf('sitepreview') > 0 ||
-            url.indexOf('livepreview') > 0 ||
-            url.indexOf('live-preview') > 0 ||
-            url.indexOf('live.') > 0 ||
-            url.indexOf('.builder.') > 0
-        );
-    }
-
-    /**
-     * The current checkout mode for this component
-     *
-     * @type {CheckoutMode}
-     */
-    get checkoutMode() {
-
-        return this._checkoutMode;
-    }
-
-
 
 }

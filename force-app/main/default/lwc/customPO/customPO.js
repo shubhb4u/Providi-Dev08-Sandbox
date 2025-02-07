@@ -74,7 +74,7 @@ export default class CustomPO extends NavigationMixin(useCheckoutComponent(Light
     @wire(CheckoutInformationAdapter, {})
     checkoutInfo({ error, data }) {
         if (!this.isInSitePreview()) {
-            console.log('PO checkoutInfo');
+            console.log(' checkoutInfo');
 
             if (data) {
                 this.checkoutId = data.checkoutId;
@@ -203,24 +203,6 @@ export default class CustomPO extends NavigationMixin(useCheckoutComponent(Light
         try {
             const paymentResult = await postAuthorizePayment(this.checkoutId, paymentId, billingAddress, { 'paymentMethod': paymentMethod });
             console.log('postAuthorizePayment paymentResult', paymentResult);
-            
-            // let isPoOrder = true;
-            // const postAuthRequest = {
-            //     checkoutId: this.checkoutId,
-            //     paymentId: paymentId,
-            //     billingAddress: billingAddress,
-            //     paymentMethod: paymentMethod,
-            //     amount: this.grandTotalAmount,
-
-            // };
-            
-            // const paymentResult = await createPostAuth({ postAuthRequest });
-            // console.log('postAuthorizePayment paymentResult', paymentResult);
-            
-            // Convert to JSON and send request
-            // const paymentResult = await createPostAuth({ postAuthRequest: postAuthRequest });
-            // console.log('response from post Call Imperative -- '+ JSON.stringify(paymentResult));
-
             
                 if (paymentResult.salesforceResultCode == 'Success') {
                     this.postAuthCalls = this.postAuthCalls + 1;
