@@ -13,18 +13,16 @@ import updatePaymentInstrument from '@salesforce/apex/CybersourceController.upda
 import preAuthorizeAlternatePayment from '@salesforce/apex/AlternativePaymentController.preAuthorize';
 import getCreditLimit from '@salesforce/apex/AlternativePaymentController.getCreditLimit';
 import updateCreditLimit from '@salesforce/apex/AlternativePaymentController.updateCreditLimit';
+import ERROR_INSUFFICIENT_CREDIT from '@salesforce/label/c.Error_Insufficient_Credit_Limit';
+import SUCCESS_PO_NUMBER from '@salesforce/label/c.Success_PO_Number_Generated';
+import getAdminEmail from '@salesforce/apex/CybersourceController.getAdminEmail';
+import NAME_ERROR from '@salesforce/label/c.Error_Name_Required';
+import ADDRESS_ERROR from '@salesforce/label/c.Error_Address_Required';
+import CARD_EXPIRED_ERROR from '@salesforce/label/c.Error_Card_Expired';
+import CARD_INVALID_ERROR from '@salesforce/label/c.Error_Card_Invalid';
+import CVV_INVALID_ERROR from '@salesforce/label/c.Error_CVV_Invalid';
 
-
-// Error Constants
-const NAME_ERROR = 'Name fields are required';
-const ADDRESS_ERROR = 'Address fields are required';
-const CARD_EXPIRED_ERROR = 'Credit Card is expired';
-const CARD_INVALID_ERROR = 'Invalid Card Number';
-const CVV_INVALID_ERROR = 'Invalid Security Code';
-
-
-
-export default class CybersourceCreditCard extends NavigationMixin(useCheckoutComponent(LightningElement)) {
+export default class CustomPayment extends NavigationMixin(useCheckoutComponent(LightningElement)) {
     @api checkoutDetails;
     isLoading = false;
     firstLoad = false;
@@ -56,17 +54,13 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     ];
     @track yearOptions = [];
     stateOptions = [];
-
     effectiveAccountId;
-    // cartAmount = 0.00;
-
     @track checkoutId;
     @track shippingAddress;
     @track errorMessages = [];
     @track billingAddress;
     @track showError = false;
     @track error;
-
     @api headerLabel;
     @api inputLabel;
     @api placeholderLabel;
@@ -79,7 +73,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     availableCreditLimit;
     disablePlaceOrderButton = false;
     generatedPONumber;
-
     @track grandTotalAmount;
     paymentId;
     cartId;
@@ -87,6 +80,50 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     isPO = false;
     isWire = false;
     selectedPaymentType;
+    adminEmail;
+    orderReferenceNumber;
+    genPONumber;
+
+    @wire(getAdminEmail)
+    wiredAdminEmail({ error, data }) {
+        if (data) {
+            this.adminEmail = data;
+        } else if (error) {
+            console.error('Error fetching admin email:', error);
+        }
+    }
+
+    get errorMessage() {
+        return ERROR_INSUFFICIENT_CREDIT.replace('{0}', this.adminEmail);
+    }
+
+    get successMessage() {
+        return SUCCESS_PO_NUMBER.replace('{0}', this.genPONumber);
+    }
+
+    @wire(CheckoutInformationAdapter, {})
+    checkoutInfo({ error, data }) {
+        if (!this.isInSitePreview()) {
+            if (data) {
+                this.checkoutId = data.checkoutId;
+                this.cartId = data.cartSummary?.cartId;
+                this.deliveryAddress = data.deliveryGroups?.items[0].deliveryAddress;
+                this.grandTotalAmount = parseFloat(data.cartSummary?.grandTotalAmount || 0);
+                console.log('PO checkoutInfo:', JSON.stringify(data));
+                this.shippingAddress = data.deliveryGroups?.items[0].deliveryAddress;
+                this.orderReferenceNumber = data.orderReferenceNumber;
+
+                if (!this.availableCreditLimit) {
+                    this.getAccountCreditLimit();
+                } else {
+                    this.evaluatePlaceOrderButton();
+                }
+                this.generateRandomPONumber();
+            } else if (error) {
+                console.log('##cybersourcePayment checkoutInfo Error:', error);
+            }
+        }
+    }
 
     handlePaymentTypeSelection(event) {
         this.selectedPaymentType = event.currentTarget.dataset.type;
@@ -105,40 +142,10 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
         }
     }
 
-
-    @wire(CheckoutInformationAdapter, {})
-    checkoutInfo({ error, data }) {
-        if (!this.isInSitePreview()) {
-            console.log(' checkoutInfo');
-
-            if (data) {
-                this.checkoutId = data.checkoutId;
-                this.cartId = data.cartSummary?.cartId;
-                this.deliveryAddress = data.deliveryGroups?.items[0].deliveryAddress;
-                this.grandTotalAmount = parseFloat(data.cartSummary?.grandTotalAmount || 0); // Ensure numeric value
-                console.log('PO checkoutInfo:', JSON.stringify(data));
-
-                this.shippingAddress = data.deliveryGroups?.items[0].deliveryAddress;
-
-                // Now that we have grandTotalAmount, check credit limit if not already checked
-                if (!this.availableCreditLimit) {
-                    this.getAccountCreditLimit();
-                } else {
-                    this.evaluatePlaceOrderButton();
-                }
-            } else if (error) {
-                console.log('##cybersourcePayment checkoutInfo Error:', error);
-            }
-        }
-    }
-
     async getAccountCreditLimit() {
         try {
             const response = await getCreditLimit({ accountId: this.effectiveAccountId });
-            console.log('response-->>', JSON.stringify(response));
             this.availableCreditLimit = parseFloat(response.Credit_limit__c || 0);
-
-            // Ensure grandTotalAmount is available before evaluating the button
             if (this.grandTotalAmount !== undefined) {
                 this.evaluatePlaceOrderButton();
             }
@@ -148,17 +155,10 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     }
 
     evaluatePlaceOrderButton() {
-        if (this.availableCreditLimit !== undefined && this.grandTotalAmount !== undefined) {
+        if (this.availableCreditLimit !== undefined && this.grandTotalAmount !== undefined && this.isPO) {
             this.disablePlaceOrderButton = this.availableCreditLimit < this.grandTotalAmount;
-            console.log('disablePlaceOrderButton-->>', this.disablePlaceOrderButton);
-            if (!this.disablePlaceOrderButton) {
-                this.generatedPONumber = this.generateRandomPONumber();
-            } else {
-                this.generatedPONumber = '';
-            }
         }
     }
-
 
     async connectedCallback() {
         if (!sessionStorage.getItem('pageReloaded')) {
@@ -173,8 +173,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
 
             if (this.effectiveAccountId) {
                 await this.getAccountCreditLimit();
-
-                // Ensure grandTotalAmount is set before evaluating the button
                 if (this.grandTotalAmount !== undefined) {
                     this.evaluatePlaceOrderButton();
                 }
@@ -191,8 +189,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             this.yearOptions.push({ label: yearString, value: yearString });
         }
 
-        console.log('yearOptions:-->> ', this.yearOptions);
-
         getStateOptions()
             .then(res => {
                 this.stateOptions = (res || []).map(state => { return { label: state.State_Name__c, value: (state.Abbreviation__c + ':' + state.Country_Code__r.Alpha2Code__c) }; });
@@ -200,7 +196,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             .catch(err => {
                 console.log(err);
             });
-
 
         await loadScript(this, microformScript)
             .then(() => {
@@ -211,9 +206,8 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     }
 
     generateRandomPONumber() {
-        return `PO-${Math.floor(10000 + Math.random() * 90000)}`;
-    }
-
+        this.genPONumber = `PO-${this.orderReferenceNumber}`; 
+    }    
 
     @api
     reportValidity() {
@@ -222,26 +216,20 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             this.errorMessages = [];
             let isValid = true;
             let isShippingValid = this.validateShippingAddress();
-
             isValid = isValid && this.checkValidity();
-
             if (!isShippingValid) {
                 this.errorMessages.push('Please select a valid Shipping Address');
             }
-
             return isValid && isShippingValid && this.errorMessages.length < 1;
 
         } else {
-            console.log('simplePurchaseOrder: in reportValidity');
-            const purchaseOrderInput = this.generatedPONumber;
+            const purchaseOrderInput = this.genPONumber;
             let isValid = false;
 
             if (purchaseOrderInput) {
-                console.log('simplePurchaseOrder purchaseOrderInput: ' + JSON.stringify(purchaseOrderInput));
                 isValid = true;
                 this.showError = false;
             } else {
-                console.log('simplePurchaseOrder purchaseOrderInput not found: ' + JSON.stringify(purchaseOrderInput));
                 this.showError = true;
                 this.error = "Please enter a purchase order number.";
             }
@@ -251,38 +239,18 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
 
     @api
     async paymentProcess() {
-        console.log('simplePurchaseOrder: in checkout save');
 
         if (!this.reportValidity()) {
             throw new Error('Required data is missing');
         }
-
         if (this.isCreditCard) {
             this.createTransientToken();
         } else {
             const createAltPayment = await this.preAuthorizePayment();
         }
-
     }
-
-
-    @api
-    async completePayment() {
-        let address = this.shippingAddress;
-        const purchaseOrderInputValue = this.generatedPONumber;
-
-        console.log('Inside completePayment');
-        let po = await simplePurchaseOrderPayment(this.checkoutId, purchaseOrderInputValue, address);
-        console.log('po authorized -->> ' + JSON.stringify(po));
-        setTimeout(() => {
-            this.callPostAuth(this.authPaymentToken, address, 'Purchase Order');
-        }, 3000);
-        return po;
-    }
-
 
     async preAuthorizePayment() {
-        // console.log('authorizePayment called-->> ');
         await preAuthorizeAlternatePayment({
             country: this.deliveryAddress.country,
             postalCode: this.deliveryAddress.postalCode,
@@ -290,34 +258,41 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             city: this.deliveryAddress.city,
             street: this.deliveryAddress.street,
             cartId: this.cartId,
-            paymentMethod: 'Purchase Order Cybersource'
+            paymentMethod: 'Purchase Order'
         }).then(response => {
-
             if (typeof response === 'string') {
                 response = JSON.parse(response);
             }
-
-            this.alternatePaymentMet = response;
-            console.log('this.alternatePaymentMet:-->> ', this.alternatePaymentMet);
-
             this.authPaymentToken = response.GatewayToken;
-
+            console.log('response from preAuthorize -->> '+ JSON.stringify(response));
             this.completePayment();
-
             return this.authPaymentToken;
+
         }).catch(error => {
             return error;
         });
     }
 
+    @api
+    async completePayment() {
+        let address = this.shippingAddress;
+        const purchaseOrderInputValue = this.genPONumber;
+        let po = await simplePurchaseOrderPayment(this.checkoutId, purchaseOrderInputValue, address);
+        console.log('po authorized --> '+ JSON.stringify(po));
+        setTimeout(() => {
+            this.callPostAuth(this.authPaymentToken, address, 'Purchase Order');
+        }, 3000);
+        return po;
+    }
 
-    ////////////////////////// Credit card Code /////////////
+    ////////////////////////// Credit card Code ////////////////////////////////////////////////////
 
     // create the Cybersource form and add the fields
     setupMicroform() {
         generateKey().then(res => {
             const flex = new Flex(res);
-            const microform = flex.microform({ 'iframe': { 'line-height': '0.5rem' } });
+            // const microform = flex.microform({ 'iframe': { 'line-height': '0.5rem' } });
+            const microform = flex.microform();
             const number = microform.createField('number');
             const securityCode = microform.createField('securityCode', { maxLength: 4 });
             const numberElement = this.template.querySelector('.number-container');
@@ -325,10 +300,9 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
             number.load(numberElement);
             securityCode.load(securityCodeElement);
             this.microform = microform;
-        })
-            .catch(err => {
-                console.log('err from setup microform -->> ' + err);
-            });
+        }).catch(err => {
+            console.log('err from setup microform -->> ' + err);
+        });
     }
 
     handleFirstNameChange(event) {
@@ -458,7 +432,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
                     this.errorMessages.push(err.message);
                     console.log('err.message--..' + err.message);
                 }
-                console.log('Error:', this.errorMessages);
                 this.createTokenReturned = true;
             }
             console.log('Token:', token);
@@ -505,7 +478,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
                 communityId: this.currentCommunityId,
                 amount: this.grandTotalAmount
             };
-
             // Authorize Card
             const authorizeResponse = await authorizeCard({ paymentsData: paymentData });
 
@@ -513,21 +485,15 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
                 this.errorMessages = ['Error: Unknown error processing card'];
                 return this.errorMessages;
             }
-
             console.log('authorizeResponse:', authorizeResponse);
-
             const paymentId = authorizeResponse.id;
             this.authPaymentToken = paymentId;
-
             this.paymentId = paymentId;
-            console.log('paymentId:', paymentId);
 
             if (paymentId) {
                 // Wait for 3 seconds before proceeding (if needed)
                 await new Promise(resolve => setTimeout(resolve, 3000));
-
                 const paymentResult = await this.callPostAuth(paymentId, billingAddress, 'Credit Card');
-                console.log('Payment Result:', paymentResult);
 
                 if (paymentResult && paymentResult.salesforceResultCode === 'Success') {
                     return {
@@ -552,7 +518,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
     get showCardErrors() {
         return this.errorMessages.length > 0;
     }
-
 
     validateShippingAddress() {
         let isValidShipping = false;
@@ -587,6 +552,7 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
         return isValid && this.errorMessages.length < 1;
     }
 
+    // Credit card and Custom PO common code for Post Auth -
     async callPostAuth(paymentId, billingAddress, paymentMethod) {
         try {
             const paymentResult = await postAuthorizePayment(this.checkoutId, paymentId, billingAddress, { 'paymentMethod': paymentMethod });
@@ -614,7 +580,6 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
 
         } catch (error) {
             console.log('postAuthorizePayment- exception', error);
-            // console.log("this.postAuthCalls", this.postAuthCalls);
             if (this.postAuthCalls == 1) {
                 this.postAuthCalls = this.postAuthCalls + 1;
                 setTimeout(() => {
@@ -632,33 +597,27 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
 
     @api
     updatePaymentInformation() {
-        console.log('updatePaymentInformation entry');
-        updatePaymentInstrument({ cartId: this.cartId, gatewayToken: this.authPaymentToken }).then((data) => {
+        console.log('PoNumber in updatePaymentInstrument --> '+ this.genPONumber);
+        updatePaymentInstrument({ cartId: this.cartId, gatewayToken: this.authPaymentToken, PoNumber: this.genPONumber })
+        .then((data) => {
             console.log('Payment instrument updated successfully.', data);
             if (data) {
                 this.callPlaceOrderAPI();
             }
-
-        }).catch(error => {
+        })
+        .catch(error => {
             console.log('reviewCartDetails- updatePaymentInstrument', JSON.stringify(error));
         });
-
     }
 
     async callPlaceOrderAPI() {
         let orderResponse = await placeOrder();
-
-        // console.log("Order placed successfully:-->>>", JSON.stringify(orderResponse));
         console.log("Order placed successfully: orderResponse.orderReferenceNumber:-->>>", orderResponse.orderReferenceNumber);
 
         if (orderResponse.orderReferenceNumber) {
-
-            //Update credit limit of the account if order placed by PO - 
             if (this.isPO) {
                 this.updateCreditLimitAccount();
-
             }
-
             refreshCartSummary();
             this.navigateToOrder(orderResponse.orderReferenceNumber);
             console.log('Order With AltPayment orderReferenceNumber: ' + orderResponse.orderReferenceNumber);
@@ -667,12 +626,9 @@ export default class CybersourceCreditCard extends NavigationMixin(useCheckoutCo
         }
     }
 
-
     async updateCreditLimitAccount() {
         try {
             const response = await updateCreditLimit({ accountId: this.effectiveAccountId, total: this.grandTotalAmount });
-            console.log('response-->>', JSON.stringify(response));
-
         } catch (error) {
             console.log('Error fetching credit limit-->>', error);
         }

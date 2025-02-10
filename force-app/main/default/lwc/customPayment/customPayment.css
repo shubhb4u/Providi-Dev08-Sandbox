@@ -20,9 +20,7 @@
     align-items: center;
     justify-content: center;
     flex: 1;
-    /* Makes items flexible */
     max-width: 30%;
-    /* Ensures they take up to 30% of the container */
     text-align: center;
     cursor: pointer;
 }
@@ -33,56 +31,78 @@
     align-items: center;
 }
 
-
-.microflex-container,
-.expiration-container,
-.cardname-container {
+.microflex-container {
     display: flex;
+    gap: 15px;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap; 
+    margin-bottom: 10px;
 }
 
-h2.dxp-text-heading-medium {
-    font-weight: var(--dxp-c-text-block-font-weight);
-    margin-bottom: 12px;
+.microform-layout-item {
+    flex: 1; 
+    min-width: 150px;
 }
 
-.form-control {
-    height: 20px;
+.microform-layout-item .slds-form-element__control {
     display: flex;
     align-items: center;
 }
 
-.microform-layout-item,
-lightning-select,
-lightning-input {
-    margin-right: 32px;
-}
-
-.form-control iframe {
-    height: 20px;
-}
-
-.form-control .slds-input {
-
-    height: 20px;
-}
-
-.error-messages-container {
-    color: red;
-}
-
-.cardname-container {
+.number-container,
+.securityCode-container {
+    height: 30px !important;  
+    min-height: 30px;
     display: flex;
-    flex-direction: column;
-    gap: 15px;
+    align-items: center;
     width: 100%;
-    padding: 0.5rem;
-    /* max-width: 400px;  */
+}
+
+.number-container .slds-input,
+.securityCode-container .slds-input {
+    height: 30px !important;
+    min-height: 30px;
+    padding: 2px;  
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .microflex-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
+
+.expiration-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 15px;
+}
+
+.expiration-container lightning-select {
+    flex: 1; 
+    min-width: 50px;
 }
 
 .input-fields {
     display: flex;
     flex-direction: column;
     width: 100%;
+}
+
+.cardname-container lightning-input,
+.cardname-container lightning-select {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .expiration-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
 }
 
 
@@ -92,7 +112,7 @@ lightning-input {
     display: flex;
     justify-content: center; 
     align-items: center; 
-
+    max-height: 40px;
 }
 
 .button button {
@@ -124,51 +144,38 @@ lightning-input {
     box-shadow: none;
 }
 
-
-/* Success message styles */
 .success-card {
     background: #3d854e !important;
-    /* Darker green */
     border-left: 5px solid #216c24 !important;
-    /* White border */
     padding: 15px;
     border-radius: 5px;
     color: #fff;
-    /* Ensuring white text for readability */
     margin-top: 1rem;
 }
 
 .success-message {
     color: #fff;
-    /* White text for better contrast */
     font-weight: bold;
 }
 
-/* Error message styles */
 .error-card {
     background: #e05361 !important;
-    /* Darker red */
     border-left: 5px solid #721c24 !important;
-    /* Darker red border */
     padding: 15px;
     border-radius: 5px;
     color: #fff;
-    /* Ensuring white text */
     margin-top: 1rem;
 }
 
 .error-message {
     color: #fff;
-    /* White text for better contrast */
     font-weight: bold;
 }
 
 .error-message a {
-
     color: aliceblue;
 }
 
-/* Add spacing between elements */
 .success-card,
 .error-card {
     padding: 15px;

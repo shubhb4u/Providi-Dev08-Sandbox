@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomLabels xmlns="http://soap.sforce.com/2006/04/metadata">
+    <labels>
+        <fullName>Error_Address_Required</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Error_Address_Required</shortDescription>
+        <value>Address fields are required</value>
+    </labels>
+    <labels>
+        <fullName>Error_CVV_Invalid</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Error_CVV_Invalid</shortDescription>
+        <value>Invalid Security Code</value>
+    </labels>
+    <labels>
+        <fullName>Error_Card_Expired</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Error_Card_Expired</shortDescription>
+        <value>Credit Card is expired</value>
+    </labels>
+    <labels>
+        <fullName>Error_Card_Invalid</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Error_Card_Invalid</shortDescription>
+        <value>Invalid Card Number</value>
+    </labels>
+    <labels>
+        <fullName>Error_Insufficient_Credit_Limit</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Error_Insufficient_Credit_Limit</shortDescription>
+        <value>❌ Insufficient credit limit to place an order. Please contact your account executive: {0}</value>
+    </labels>
+    <labels>
+        <fullName>Error_Name_Required</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Error_Name_Required</shortDescription>
+        <value>Name fields are required</value>
+    </labels>
+    <labels>
+        <fullName>Success_PO_Number_Generated</fullName>
+        <language>en_US</language>
+        <protected>false</protected>
+        <shortDescription>Success_PO_Number_Generated</shortDescription>
+        <value>✅ Please use this PO number to place your order: {0}</value>
+    </labels>
+</CustomLabels>

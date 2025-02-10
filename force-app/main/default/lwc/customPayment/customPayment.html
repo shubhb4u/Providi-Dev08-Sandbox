@@ -7,27 +7,23 @@
                     <lightning-icon class="slds-m-bottom_x-small slds-align_absolute-center"
                         icon-name="utility:card_details" size="large"></lightning-icon>
                     <span>Credit Card</span>
-
                 </div>
-
             </li>
+
             <li onclick={handlePaymentTypeSelection} data-type="po">
                 <div>
                     <lightning-icon class="slds-m-bottom_x-small slds-align_absolute-center"
                         icon-name="utility:multi_picklist" size="large"></lightning-icon>
                     <span>Purchase Order</span>
-
                 </div>
-
             </li>
+
             <li onclick={handlePaymentTypeSelection} data-type="wire">
                 <div>
                     <lightning-icon class="slds-m-bottom_x-small slds-align_absolute-center"
                         icon-name="utility:agent_home" size="large"></lightning-icon>
                     <span>Wire Transfer</span>
-
                 </div>
-
             </li>
         </ul>
 
@@ -66,7 +62,7 @@
                         </label>
                         <div class="slds-form-element__control">
                             <div id="number-container" class="number-container form-control slds-input"
-                                style="width: 70%;" lwc:dom="manual"></div>
+                                 lwc:dom="manual"></div>
                         </div>
                     </div>
                     <div class="slds-form-element microform-layout-item">
@@ -76,7 +72,7 @@
                         </label>
                         <div class="slds-form-element__control">
                             <div id="securityCode-container" class="securityCode-container form-control slds-input"
-                                style="width: 30%;" lwc:dom="manual"></div>
+                                 lwc:dom="manual"></div>
                         </div>
                     </div>
                 </div>
@@ -98,29 +94,24 @@
         </template>
 
         <template lwc:elseif={isPO}>
-            <lightning-input label="Enter Purchase Order Number" name="poNumber" value={generatedPONumber}
+            <lightning-input label="Enter Purchase Order Number" name="poNumber" value={genPONumber}
                 read-only></lightning-input>
             <template lwc:if={disablePlaceOrderButton}>
                 <div class="error-card">
-                    <p class="error-message">
-                        ❌ Insufficient credit limit to place an order.
-                        Please contact your account executive :
-                        <a href="mailto:Shubham.m@etg.digital">Shubham.m@etg.digital</a>
+                    <p class="error-message">{errorMessage}
                     </p>
                 </div>
             </template>
             <template lwc:else>
                 <div class="success-card">
-                    <p class="success-message">
-                        ✅ Please use this PO number to place your order :
-                        <strong>{generatedPONumber}</strong>
+                    <p class="success-message">{successMessage}
                     </p>
                 </div>
             </template>
         </template>
 
         <template lwc:elseif={isWire}>
-            Wire ACH Coming soon !!
+            Wire ACH Coming soon !! 🏈
         </template>
         <template lwc:else>
             <div>Select a payment method</div>

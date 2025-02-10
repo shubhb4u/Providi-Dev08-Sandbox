@@ -1,4 +1,9 @@
 global with sharing class CybersourcePaymentAdapter implements commercepayments.PaymentGatewayAdapter {
+
+    public CybersourcePaymentAdapter() {
+
+    }
+
     // Salesforce Result Codes
     private static final commercepayments.SalesforceResultCodeInfo RC_SUCCESS = toCodeInfo(commercepayments.SalesforceResultCode.Success);
     private static final commercepayments.SalesforceResultCodeInfo RC_DECLINE = toCodeInfo(commercepayments.SalesforceResultCode.Decline);
@@ -12,25 +17,6 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
         'DUPLICATE_REQUEST','INVALID_CARD','CARD_TYPE_NOT_ACCEPTED','INVALID_MERCHANT_CONFIGURATION','PROCESSOR_UNAVAILABLE','INVALID_AMOUNT',
         'INVALID_CARD_TYPE','INVALID_PAYMENT_ID','DEBIT_CARD_USEAGE_EXCEEDD_LIMIT'};
 
-    // Cybersource Card Types
-    // TODO: Move to Custom Meta Data so new card types can be added easier
-    private static final Map<String, String> cardTypesMap = new Map<String, String>{
-        '001' => 'VISA',
-        '002' => 'Mastercard',
-        '003' => 'American Express',
-        '004' => 'Discover',
-        '005' => 'Diners Club'
-        };
-
-    // TODO: Move to Custom Meta Data so new card types can be added easier
-	private static final Map<String, String> cardCodesMap = new Map<String, String>{
-        'VISA' => '001',
-        'Mastercard' => '002',
-        'American Express' => '003',
-        'Discover' => '004',
-        'Diners Club' => '005'
-        };
-
 	private static String apiUrl = '';
     private static String merchantId = '';
     private static String apiKey = '';
@@ -39,8 +25,6 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
     private static String origin = '';
     private static String captureContext = '';
     private static String dateString = '';
-
-    private static String TRANSACTION_ENDPOINT = '/tss/v2/transactions/';
 
     private static void setApiSettings() {
         Payment_Api_Variables__c pav = Payment_Api_Variables__c.getValues('Cybersource');
@@ -55,12 +39,17 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
         System.debug('setApiSettings - apiUrl: ' + apiUrl + ' merchantId: ' + merchantId + ' apiKey: ' + apiKey + ' userEmail: ' + userEmail + ' origin: ' + origin + ' dateString: ' + dateString);
     }
 
-    public CybersourcePaymentAdapter() {
-
+    public static String getApiEndpoint(String name) {
+        Payment_Api_Endpoints__mdt endpoint = [
+            SELECT Endpoint_Url__c FROM Payment_Api_Endpoints__mdt 
+            WHERE Endpoint_Name__c = :name 
+            LIMIT 1
+        ];
+        return endpoint.Endpoint_Url__c;
     }
 
     global commercepayments.GatewayResponse processRequest(commercepayments.paymentGatewayContext gatewayContext) {
-        System.debug('CybersourcePaymentAdapter.processRequest entry');
+
         commercepayments.RequestType requestType = gatewayContext.getPaymentRequestType();
         System.debug('requestType: ' + requestType);
         commercepayments.PaymentGatewayRequest paymentRequest = gatewayContext.getPaymentRequest();
@@ -75,14 +64,12 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
                 System.debug('additionalData-paymentMethod: ' + additionalData.get('paymentMethod'));
                 if (selectedPaymentMethod != null && selectedPaymentMethod == 'Wire') {
                      response =  createPostAuthResponse( (commercepayments.PostAuthorizationRequest) paymentRequest);
-                
                 }else if(selectedPaymentMethod != null && selectedPaymentMethod == 'Purchase Order'){
                     response =  createPostAuthResponsePurchaseOrder( (commercepayments.PostAuthorizationRequest) paymentRequest);
-                 }
-                 else { // Credit Card
+                }
+                else {
                     response = createPostAuthResponse( (commercepayments.PostAuthorizationRequest) paymentRequest);
                 }
-
             }
             return response;
         } catch (CyberSourceValidationException e) {
@@ -105,7 +92,7 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
         setApiSettings();
         commercepayments.PostAuthorizationResponse postAuthResponse = new commercepayments.PostAuthorizationResponse();
 
-        String target = TRANSACTION_ENDPOINT + gatewayToken;
+        String target = getApiEndpoint('Transaction') + gatewayToken;
         HttpRequest req = new HttpRequest();
 		req.setMethod('GET');
         setTransactionHeaders(req, target);
@@ -123,13 +110,11 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
             for (String key : results.keySet()) {
                 System.debug(key + ':- ' + results.get(key));
             }
-            // System.debug('cardType: '+ results.get('paymentInformation'));
             // populate the commercepayments.PostAuthorizationResponse
             String intentStatus = (String)results.get('status');
             Integer sc = response.getStatusCode();
             if(sc == 200) {
 
-                // postAuthResponse.setGatewayReferenceDetails(JSON.Serialize(results.get('paymentInformation')));
                 postAuthResponse.setGatewayAuthCode(gatewayToken);
                 postAuthResponse.setGatewayResultCode('success');
                 postAuthResponse.setSalesforceResultCodeInfo(RC_SUCCESS);
@@ -141,19 +126,15 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
         } catch(CalloutException ce) {
             return new commercepayments.GatewayErrorResponse('500', ce.getMessage());
         }
-
         System.debug('postAuthResponse exit: ' + postAuthResponse);
         return postAuthResponse;
     }
 
     private commercepayments.GatewayResponse createPostAuthResponsePurchaseOrder(commercepayments.PostAuthorizationRequest postAuthRequest) {
-        System.debug('createPostAuthResponsePurchaseOrder entry');
+
         commercepayments.PostAuthApiPaymentMethodRequest apiPaymentMethod =(commercepayments.PostAuthApiPaymentMethodRequest) postAuthRequest.paymentMethod;
         commercepayments.AlternativePaymentMethodRequest altPaymentMethod= (commercepayments.AlternativePaymentMethodRequest) apiPaymentMethod.alternativePaymentMethod;
-        // LWC passes in the Cybersource RequestId as the gatewayToken
         String gatewayToken = (String) altPaymentMethod.gatewayToken;
-        System.debug('gatewayToken:-->> ' + gatewayToken);
-        
         commercepayments.PostAuthorizationResponse postAuthResponse = new commercepayments.PostAuthorizationResponse();
 
         postAuthResponse.setGatewayAuthCode(gatewayToken);
@@ -176,18 +157,12 @@ global with sharing class CybersourcePaymentAdapter implements commercepayments.
 		req.setHeader('Content-Type', 'application/json');
         req.setHeader('Host', apiUrl);
 		req.setHeader('User-Agent', 'Mozilla/5.0');
-		// req.setHeader('Host', apiUrl);
 		DateTime dt = DateTime.now();
 		String dateString = dt.format('E, dd MMM yyyy HH:mm:ss z', 'GMT');
 		req.setHeader('v-c-date', dateString);
 		req.setHeader('v-c-merchant-id', merchantId);
         String sigN = 'keyid="'+apiKey+'", algorithm="HmacSHA256", headers="host v-c-date request-target v-c-merchant-id", signature="'+ generateTransactionSignature(req, dateString, target)+'"';
 		req.setHeader('Signature', sigN);
-        // System.debug('getTransactionHeaders exit - Signature - ' + req.getHeader('Signature'));
-        // System.debug('getTransactionHeaders exit - v-c-date - ' + req.getHeader('v-c-date'));
-        // System.debug('getTransactionHeaders exit - Host - ' + req.getHeader('Host'));
-        // System.debug('getTransactionHeaders exit - v-c-merchant-id - ' + req.getHeader('v-c-merchant-id'));
-        // System.debug('setTransactionHeaders exit - sigN - ' + sigN);
 	}
 
 	private static String generateTransactionSignature(HttpRequest req, String dateString, String target) {

@@ -1,6 +1,4 @@
-public with sharing class CybersourceController {
-
-    private static String AUTHORIZE_ENDPOINT = '/pts/v2/payments/';
+public without sharing class CybersourceController {
 
     private static String apiUrl = '';
     private static String merchantId = '';
@@ -11,21 +9,54 @@ public with sharing class CybersourceController {
     private static String captureContext = '';
     private static String dateString = '';
     private static String cardinalCommerceUrl = '';
-    private static final Map<String, String> cardTypesMap = new Map<String, String>{
-        '001' => 'VISA',
-        '002' => 'Mastercard',
-        '003' => 'American Express',
-        '004' => 'Discover',
-        '005' => 'Diners Club'
-        };
+    private static final Map<String, String> cardTypesMap = getCardTypesMap();
 
-    // This is currently pulling the State Names and ISO Codes from the State / Country Picklist
-    // A better way to do this may be to use Custom Metadata
+    @AuraEnabled
+    public static Map<String, String> getCardTypesMap() {
+        Map<String, String> cardTypes = new Map<String, String>();
+        for (Card_Type_Mapping__mdt card : [SELECT Card_Code__c, Card_Type__c FROM Card_Type_Mapping__mdt]) {
+            cardTypes.put(card.Card_Code__c, card.Card_Type__c);
+        }
+        return cardTypes;
+    }
+
+    @AuraEnabled
+    public static String getApiEndpoint(String name) {
+        Payment_Api_Endpoints__mdt endpoint = [
+            SELECT Endpoint_Url__c FROM Payment_Api_Endpoints__mdt 
+            WHERE Endpoint_Name__c = :name 
+            LIMIT 1
+        ];
+        return endpoint.Endpoint_Url__c;
+    }
+
+    @AuraEnabled
+    public static List<String> getAllowedCardNetworks() {
+        List<String> networks = new List<String>();
+        for (Allowed_Card_Networks__mdt network : [SELECT MasterLabel, Network_Name__c FROM Allowed_Card_Networks__mdt where MasterLabel like 'Cybersource%']) {
+            networks.add(network.Network_Name__c);
+        }
+        return networks;
+    }
+    
     @AuraEnabled
     public static List<State_Code__mdt> getStateOptions(){
         List<State_Code__mdt> stateCodes = [SELECT Id, State_Name__c, Abbreviation__c, Country_Code__r.Alpha2Code__c FROM State_Code__mdt ORDER BY State_Name__c];
-        System.debug('statecodes: ' + stateCodes);
 		return stateCodes;
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static String getAdminEmail() {
+        User adminUser = [SELECT name, Email, Profile.Name FROM User WHERE Profile.Name = 'System Administrator' and name like 'Shubham%'
+            LIMIT 1
+        ];
+        return adminUser.Email;
+    }
+
+    public static String getUserAccountID() {
+        String userId = UserInfo.getUserId();
+        String contactId = [SELECT ContactId FROM User WHERE Id = :userId].ContactId;
+        return [SELECT AccountId FROM Contact WHERE Id = :contactId].AccountId; 
     }
 
     private static void setApiSettings() {
@@ -44,12 +75,12 @@ public with sharing class CybersourceController {
     public static String generateKey() {
         setApiSettings();
         try {
-            String reqTarget = '/microform/v2/sessions';
-            String reqBody = '{"targetOrigins":["' + origin + '"], "allowedCardNetworks": ["VISA", "MASTERCARD", "AMEX", "JCB", "DINERSCLUB", "DISCOVER"],"clientVersion": "v2.0"}';
+            String reqTarget = getApiEndpoint('MicroformSession');
+            List<String> allowedCardNetworks = getAllowedCardNetworks();
+            String reqBody = '{"targetOrigins":["' + origin + '"], "allowedCardNetworks": ' + JSON.serialize(allowedCardNetworks) + ',"clientVersion": "v2.0"}';
             HttpRequest req = generatePostRequest(reqTarget, reqBody);
             Http http = new Http();
             HttpResponse res = http.send(req);
-            // System.debug('Response generateKey: ->>>>>>  '+res.getBody());
             return res.getBody();
         } catch(Exception e) {
             return e.getMessage();
@@ -57,48 +88,44 @@ public with sharing class CybersourceController {
     }
 
     @AuraEnabled
-    public static Boolean updatePaymentInstrument(String cartId, String gatewayToken){
+    public static Boolean updatePaymentInstrument(String cartId, String gatewayToken, String PoNumber){
         try {
-            System.debug('cartId:' + cartId);
             List<WebCart> cartobj = [SELECT Id, PaymentMethodId, PaymentGroupId, Status, Type from WebCart where id = :cartId Limit 1];
             String paymentMethodId = cartobj[0].PaymentMethodId;
             AlternativePaymentMethod  apm = [SELECT Id, OwnerId, cardLastFour__c, AlternativePaymentMethodNumber, PaymentGatewayId, NickName, GatewayToken, GatewayTokenDetails, Email, AccountId, Status, CompanyName, PaymentMethodStreet, PaymentMethodCity, PaymentMethodState, PaymentMethodPostalCode, PaymentMethodCountry, PaymentMethodAddress, ProcessingMode,  Phone, IpAddress, AuditEmail, IsAutoPayEnabled, PaymentMethodType, PaymentMethodSubType, PaymentMethodDetails, Type FROM AlternativePaymentMethod WHERE Id = :paymentMethodId];
-            
-                PaymentGatewayLog pgl = [SELECT Id, GatewayAuthCode, SfResultCode,  Response FROM PaymentGatewayLog where GatewayAuthCode = :gatewayToken Limit 1];
-                System.debug('PaymentGatewayLog response: ' + pgl.Response);
-                String purchaseOrderType = pgl.gatewayAuthCode.split(' ')[0];
-                if(purchaseOrderType == 'Purchase' ){
-                    apm.PaymentMethodType = 'PO';
-                    apm.Type = 'PO';
-                }else{
-                    Map<String,Object> results = (Map<String,Object>) JSON.deserializeUntyped(pgl.Response);
-                    // for (String key : results.keySet()) {
-                    //     System.debug(key + ':- ' + results.get(key));
-                    // }
-                    System.debug('cardType: '+ results.get('paymentInformation'));
-                    Map<String,Object> paymentInformation = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(results.get('paymentInformation')));
-
-                    // System.debug('paymentInformation.card '+ paymentInformation.get('card'));
-                    Map<String,Object> paymentType = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentInformation.get('paymentType')));
-                    if (paymentType.get('type') != null || paymentType.get('type') == 'credit card') {
-                        Map<String,Object> paymentCard = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentInformation.get('card')));
-                        String cardType = cardTypesMap.get((String) paymentCard.get('type'));
-                        String cardLastFour = (String) paymentCard.get('suffix');
-                        apm.Type = 'Credit Card - ' + cardType;
-                        apm.PaymentMethodType = cardType;
-                        apm.cardLastFour__c = cardLastFour;
-                    } else if (paymentType.get('type') != null || paymentType.get('type') == 'check') {
-                        Map<String,Object> paymentBank = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentInformation.get('bank')));
-                        Map<String,Object> paymentAccount = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentBank.get('account')));
-                        String accountSuffix = (String) paymentAccount.get('suffix');
-                        apm.Type = 'ACH - ' + paymentType.get('method');
-                        apm.PaymentMethodType = 'ACH';
-                        // apm.BankAccountType = paymentType.get('method');
-                        apm.checkAccountNumberSuffix__c = accountSuffix;
-                    }
-
+            PaymentGatewayLog pgl = [SELECT Id, GatewayAuthCode, SfResultCode,  Response FROM PaymentGatewayLog where GatewayAuthCode = :gatewayToken Limit 1];
+            System.debug('PaymentGatewayLog response: ' + pgl.Response);
+            String purchaseOrderType = pgl.gatewayAuthCode.split(' ')[0];
+            if(purchaseOrderType == 'Purchase' ){
+                apm.PaymentMethodType = 'PO';
+                apm.Type = 'PO';
+                apm.PO_Number__c = PoNumber;
+                apm.accountId = getUserAccountID();
+            }else{
+                Map<String,Object> results = (Map<String,Object>) JSON.deserializeUntyped(pgl.Response);
+                System.debug('cardType: '+ results.get('paymentInformation'));
+                Map<String,Object> paymentInformation = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(results.get('paymentInformation')));
+                // System.debug('paymentInformation.card '+ paymentInformation.get('card'));
+                Map<String,Object> paymentType = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentInformation.get('paymentType')));
+                
+                if (paymentType.get('type') != null || paymentType.get('type') == 'credit card') {
+                    Map<String,Object> paymentCard = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentInformation.get('card')));
+                    String cardType = cardTypesMap.get((String) paymentCard.get('type'));
+                    String cardLastFour = (String) paymentCard.get('suffix');
+                    apm.Type = 'Credit Card - ' + cardType;
+                    apm.PaymentMethodType = cardType;
+                    apm.cardLastFour__c = cardLastFour;
+                } else if (paymentType.get('type') != null || paymentType.get('type') == 'check') {
+                    Map<String,Object> paymentBank = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentInformation.get('bank')));
+                    Map<String,Object> paymentAccount = (Map<String,Object>) JSON.deserializeUntyped(JSON.serialize(paymentBank.get('account')));
+                    String accountSuffix = (String) paymentAccount.get('suffix');
+                    apm.Type = 'ACH - ' + paymentType.get('method');
+                    apm.PaymentMethodType = 'ACH';
+                    // apm.BankAccountType = paymentType.get('method');
+                    apm.checkAccountNumberSuffix__c = accountSuffix;
+                }
             }
-            
+            System.debug('apm updated -->> '+ apm);
             apm.Status = 'Active';
             update apm;
             return true;
@@ -112,17 +139,14 @@ public with sharing class CybersourceController {
     // We are not passing any credit card number or cvv numbers into this method
     @AuraEnabled
     public static Map<String,Object> authorizeCard(Map<String,Object> paymentsData){
-        System.debug('CybersourceController.authorizeCard enter');
         System.debug('paymentsData: ' + paymentsData);
         if (paymentsData != null && !paymentsData.isEmpty()) {
-            System.debug('*** REQUEST ***');
             for (String key : paymentsData.keySet()) {
                 System.debug(key+': ' + paymentsData.get(key));
             }
         }
-
         setApiSettings();
-        String target = AUTHORIZE_ENDPOINT;
+        String target = getApiEndpoint('Authorize');
         HttpRequest req = new HttpRequest();
         req.setEndpoint('https://'+apiUrl+target);
         req.setMethod('POST');
@@ -154,29 +178,22 @@ public with sharing class CybersourceController {
         System.debug('reqBody ' + reqBody);
         String digestString = generateDigest(reqBody);
         String signatureString = generateSignature('post', reqTarget, digestString);
-
         req.setHeader('Digest', digestString);
         req.setHeader('Signature', signatureString);
         req.setBody(reqBody);
-
         return req;
     }
 
     private static String generateDigest(String reqBody) {
         Blob digestHash = Crypto.generateDigest('SHA-256', Blob.valueOf(reqBody));
         String digestString = 'SHA-256=' + EncodingUtil.base64Encode(digestHash);
-
         return digestString;
     }
 
-
-    // --- Signature Helper Methods ---
-    //
-    //Method wrapping helper methods to create and return the string that will be set for the Signature header
+    // Method wrapping helper methods to create and return the string that will be set for the Signature header
     private static String generateSignature(String reqType, String reqTarget, String digestString) {
         String signatureHeaders = generateSignatureHeaders(reqType, reqTarget, digestString);
         String signatureHash = generateSignatureHash(signatureHeaders);
-
         return generateSignatureString(reqType, signatureHash);
     }
 
@@ -184,106 +201,68 @@ public with sharing class CybersourceController {
         HttpRequest req = new HttpRequest();
         req.setMethod(reqMethod);
         req.setEndpoint('https://'+apiUrl+ reqTarget);
-
         req.setHeader('Host', apiUrl);
         req.setHeader('v-c-merchant-id', merchantId);
         req.setHeader('Content-Type', 'application/json');
-
         req.setHeader('Date', dateString);
-
         return req;
     }
 
-    //Generates the (host date request-target digest v-c-merchant-id) string
+    // Generates the (host date request-target digest v-c-merchant-id) string
     private static String generateSignatureHeaders(String reqType, String reqTarget, String digestString) {
         String headerFields = '';
-
-        //Add host
         headerFields += ('host: ' + apiUrl + '\n');
-
-        //Add date (for POST requests only)
         if(reqType == 'post') {
             headerFields += 'date: ' + dateString + '\n';
         }
-
-        //Add request-target
         headerFields += ('request-target: ' + reqType + ' ' + reqTarget + '\n');
-
-        //Add digest (for POST requests only)
         if(reqType == 'post') {
             headerFields += ('digest: ' + digestString + '\n');
         }
-
-        //Add v-c-merchant-id
         headerFields += ('v-c-merchant-id: ' + merchantId);
-
         return headerFields;
     }
 
-    //Creates a HmacSHA256 hash of the Signature Header/Value String
+    // Creates a HmacSHA256 hash of the Signature Header/Value String
     private static String generateSignatureHash(String data) {
         Blob hash = Crypto.generateMac('HmacSHA256', Blob.valueOf(data), EncodingUtil.base64Decode(apiSecretKey));
-
         return EncodingUtil.base64Encode(hash);
     }
 
-    //Creates the value to be attached to the Signature on the POST request
+    // Creates the value to be attached to the Signature on the POST request
     private static String generateSignatureString(String reqType, String signatureHash) {
         String signatureString = '';
-
         signatureString += 'keyid="' + apiKey + '", ';
         signatureString += 'algorithm="HmacSHA256", ';
         signatureString += 'headers="host';
-
-        //Add in 'date' for POST requests (seems to break GET requests)
         if(reqType == 'post') {
             signatureString += ' date';
         }
-
         signatureString += ' request-target';
-
-        //Add in 'digest' for POST requests
         if(reqType == 'post') {
             signatureString += ' digest';
         }
-
         signatureString += ' v-c-merchant-id", ';
         signatureString += 'signature="' + signatureHash + '"';
-
         return signatureString;
     }
 
     private static String buildAuthRequestBody(Map<String,Object> paymentsData) {
-        System.debug('buildAuthRequestBody enter');
         System.debug('paymentsData: ' + paymentsData);
-
         String currencyIsoCode = (String) paymentsData.get('currencyIsoCode');
         String addressString = (String) paymentsData.get('addressString');
         System.debug('addressString: ' + addressString);
         Map<String,Object> address = (Map<String,Object>) JSON.deserializeUntyped(addressString);
 		JSONGenerator jsonGeneratorInstance = JSON.createGenerator(true);
+
 		// Write data to the JSON string
 		jsonGeneratorInstance.writeStartObject();
         jsonGeneratorInstance.writeFieldName('clientReferenceInformation');
             jsonGeneratorInstance.writeStartObject();
             jsonGeneratorInstance.writeStringField('code', generateGuid());
             jsonGeneratorInstance.writeEndObject();
-        // if((Boolean) paymentsData.get('createToken')) {
-        //     jsonGeneratorInstance.writeFieldName('processingInformation');
-        //     jsonGeneratorInstance.writeStartObject();
-        //     jsonGeneratorInstance.writeFieldName('actionList');
-        //     jsonGeneratorInstance.writeStartArray();
-        //     jsonGeneratorInstance.writeString('TOKEN_CREATE');
-        //     jsonGeneratorInstance.writeEndArray();
-        //     jsonGeneratorInstance.writeFieldName('actionTokenTypes');
-        //     jsonGeneratorInstance.writeStartArray();
-        //     jsonGeneratorInstance.writeString('instrumentIdentifier');
-        //     jsonGeneratorInstance.writeEndArray();
-        //     jsonGeneratorInstance.writeStringField('commerceIndicator', 'internet');
-        //     jsonGeneratorInstance.writeEndObject();
-        // }
 		if(paymentsData.get('token') != null) {
-            //process token auth
+            // process token auth
             jsonGeneratorInstance.writeFieldName('tokenInformation');
             jsonGeneratorInstance.writeStartObject();
             jsonGeneratorInstance.writeStringField('transientTokenJwt', (String) paymentsData.get('token'));
@@ -292,7 +271,7 @@ public with sharing class CybersourceController {
             throw new CyberSourceAuthorizeException('Required Field Missing : transientTokenJwt');
         }
 
-        //orderInformation section
+        // orderInformation section
         jsonGeneratorInstance.writeFieldName('orderInformation');
         jsonGeneratorInstance.writeStartObject();
         jsonGeneratorInstance.writeFieldName('amountDetails');
@@ -302,7 +281,7 @@ public with sharing class CybersourceController {
         jsonGeneratorInstance.writeStringField('currency', currencyIsoCode != null ? currencyIsoCode : 'USD');
         jsonGeneratorInstance.writeEndObject();
 
-        //billTo section
+        // billTo section
         if (address != null) {
             jsonGeneratorInstance.writeFieldName('billTo');
             jsonGeneratorInstance.writeStartObject();
@@ -333,7 +312,6 @@ public with sharing class CybersourceController {
         System.debug('setAuthorizationHeaders enter');
 		req.setHeader('Content-Type', 'application/json');
 		req.setHeader('User-Agent', 'Mozilla/5.0');
-		//TODO: fill these in
 		req.setHeader('Host', apiUrl);
 
 		DateTime dt = DateTime.now();

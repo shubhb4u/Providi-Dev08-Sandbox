@@ -1,7 +1,6 @@
 <template>
     <lightning-card title="Wire ACH Payment" icon-name="utility:money">
         <div class="slds-p-around_medium">
-            <!-- Account Holder Name -->
             <lightning-input
                 type="text"
                 label="Account Holder Name"
@@ -11,7 +10,6 @@
                 required>
             </lightning-input>
 
-            <!-- Routing Number -->
             <lightning-input
                 type="text"
                 label="Routing Number"
@@ -21,7 +19,6 @@
                 required>
             </lightning-input>
 
-            <!-- Account Number -->
             <lightning-input
                 type="text"
                 label="Account Number"
@@ -31,7 +28,6 @@
                 required>
             </lightning-input>
 
-            <!-- Payment Amount -->
             <lightning-input
                 type="number"
                 label="Payment Amount"
@@ -41,31 +37,13 @@
                 required>
             </lightning-input>
 
-            <!-- Currency -->
-            <!-- <lightning-input
-                type="text"
-                label="Currency (e.g., USD)"
-                name="currency"
-                value={paymentData.currency}
-                onchange={handleInputChange}
-                required>
-            </lightning-input> -->
-
-            <!-- Action Button -->
             <div class="slds-m-top_medium">
                 <lightning-button 
-                    label="Process Wire ACH Payment"
+                    label="Place Order"
                     variant="brand"
-                    onclick={handleWireAchPayment}
+                    onclick={handlePay}
                     disabled={isProcessing}>
                 </lightning-button>
-
-                <!-- <lightning-button style="margin-left: 0.5rem;"
-                    label="Generate Payment Link"
-                    variant="brand"
-                    onclick={handlePay}>
-                    
-                </lightning-button> -->
 
                 <!-- Spinner while processing -->
                 <template if:true={isProcessing}>
@@ -75,7 +53,6 @@
                     <template if:true={paymentUrlAvailable}>
                         <p>Your payment link: <a href={paymentURL} target="_blank">{paymentURL}</a></p>
                     </template>
-
                 </div>
             </div>
         </div>
